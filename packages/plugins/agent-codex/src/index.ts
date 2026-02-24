@@ -8,10 +8,11 @@ import {
   type PluginModule,
   type RuntimeHandle,
   type Session,
+  type CostEstimate,
   type WorkspaceHooksConfig,
 } from "@composio/ao-core";
 import { execFile } from "node:child_process";
-import { writeFile, mkdir, readFile, rename } from "node:fs/promises";
+import { writeFile, mkdir, readFile, readdir, rename } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -198,15 +199,21 @@ exit \$exit_code
  * and helps if the wrappers are bypassed.
  */
 const AO_AGENTS_MD_SECTION = `
-## Agent Orchestrator (ao) Session
+## Agent Orchestrator (ao) Session — Codex
 
-You are running inside an Agent Orchestrator managed workspace.
-Session metadata is updated automatically via shell wrappers.
+You are running inside an ANIMA Agent Orchestrator managed workspace (Codex agent).
+Session metadata is updated automatically via shell wrappers for git/gh commands.
+
+**Important for Codex:**
+- Use \`--full-auto\` mode when spawned by the orchestrator
+- Commit frequently — the orchestrator tracks your progress via git
+- When done, create a PR with \`gh pr create\` — metadata updates automatically
+- If tests fail after PR creation, the orchestrator will send you the CI logs
 
 If automatic updates fail, you can manually update metadata:
 \`\`\`bash
-~/.ao/bin/ao-metadata-helper.sh  # sourced automatically
-# Then call: update_ao_metadata <key> <value>
+source ~/.ao/bin/ao-metadata-helper.sh
+update_ao_metadata <key> <value>
 \`\`\`
 `;
 /* eslint-enable no-useless-escape */
@@ -290,12 +297,20 @@ function createCodexAgent(): Agent {
         parts.push("--model", shellEscape(config.model));
       }
 
+      // Codex supports --quiet for less verbose output (better for automation)
+      parts.push("--quiet");
+
       if (config.systemPromptFile) {
         // Codex reads developer instructions from a file via config override
         parts.push("-c", `model_instructions_file=${shellEscape(config.systemPromptFile)}`);
       } else if (config.systemPrompt) {
         // Codex accepts inline developer instructions via config override
         parts.push("-c", `developer_instructions=${shellEscape(config.systemPrompt)}`);
+      }
+
+      // If working directory is specified, Codex can use --cwd
+      if (config.workingDirectory) {
+        parts.push("--cwd", shellEscape(config.workingDirectory));
       }
 
       if (config.prompt) {
@@ -331,30 +346,73 @@ function createCodexAgent(): Agent {
 
       // If Codex is showing its input prompt, it's idle
       if (/^[>$#]\s*$/.test(lastLine)) return "idle";
+      // Codex "ready" prompt patterns
+      if (/codex>\s*$/i.test(lastLine)) return "idle";
+      if (/waiting for input/i.test(lastLine)) return "idle";
 
       // Check last few lines for approval prompts
-      const tail = lines.slice(-5).join("\n");
+      const tail = lines.slice(-8).join("\n");
       if (/approval required/i.test(tail)) return "waiting_input";
       if (/\(y\)es.*\(n\)o/i.test(tail)) return "waiting_input";
+      if (/confirm.*\[y\/n\]/i.test(tail)) return "waiting_input";
+      if (/do you want to proceed/i.test(tail)) return "waiting_input";
+      // Codex sandbox approval
+      if (/allow.*sandbox/i.test(tail)) return "waiting_input";
+      if (/press enter to continue/i.test(tail)) return "waiting_input";
 
-      // Default to active — specific patterns (esc to interrupt, spinner
-      // symbols) all map to "active" so no need to check them individually.
+      // Error/stuck detection
+      if (/error:|exception:|traceback|fatal:/i.test(tail)) return "error";
+      if (/rate.?limit|429|quota exceeded/i.test(tail)) return "waiting_input";
+
+      // Default to active
       return "active";
     },
 
-    async getActivityState(session: Session, _readyThresholdMs?: number): Promise<ActivityDetection | null> {
+    async getActivityState(session: Session, readyThresholdMs?: number): Promise<ActivityDetection | null> {
       // Check if process is running first
       if (!session.runtimeHandle) return { state: "exited" };
       const running = await this.isProcessRunning(session.runtimeHandle);
       if (!running) return { state: "exited" };
 
-      // NOTE: Codex stores rollout files in a global ~/.codex/sessions/ directory
-      // without workspace-specific scoping. When multiple Codex sessions run in
-      // parallel, we cannot reliably determine which rollout file belongs to which
-      // session. Until Codex provides per-workspace session tracking, we return
-      // null (unknown) rather than guessing. See issue #13 for details.
-      //
-      // TODO: Implement proper per-session activity detection when Codex supports it.
+      // Try to infer activity from Codex session files.
+      // Codex stores rollout files in ~/.codex/sessions/ — we attempt to match
+      // by checking mtime proximity to session start time.
+      const threshold = readyThresholdMs ?? 60_000;
+      const codexSessionDir = join(homedir(), ".codex", "sessions");
+      try {
+        const entries = await readdir(codexSessionDir);
+        const jsonFiles = entries.filter(f => f.endsWith(".json"));
+        if (jsonFiles.length === 0) return null;
+
+        // Find the session file closest to our session start time
+        const sessionStart = session.startedAt ? new Date(session.startedAt).getTime() : 0;
+        let bestFile: string | null = null;
+        let bestDelta = Infinity;
+
+        const { stat: statFn } = await import("node:fs/promises");
+        for (const file of jsonFiles) {
+          try {
+            const s = await statFn(join(codexSessionDir, file));
+            const delta = Math.abs(s.birthtimeMs - sessionStart);
+            if (delta < bestDelta) {
+              bestDelta = delta;
+              bestFile = file;
+            }
+          } catch { continue; }
+        }
+
+        // Only trust match if within 30s of session start
+        if (bestFile && bestDelta < 30_000) {
+          const s = await statFn(join(codexSessionDir, bestFile));
+          const idleMs = Date.now() - s.mtimeMs;
+          if (idleMs > threshold) return { state: "idle" };
+          return { state: "active" };
+        }
+      } catch {
+        // ~/.codex/sessions/ doesn't exist or not readable
+      }
+
+      // Fallback: unknown
       return null;
     },
 
@@ -409,8 +467,39 @@ function createCodexAgent(): Agent {
       }
     },
 
-    async getSessionInfo(_session: Session): Promise<AgentSessionInfo | null> {
-      // Codex doesn't have JSONL session files for introspection yet
+    async getSessionInfo(session: Session): Promise<AgentSessionInfo | null> {
+      // Codex stores sessions in ~/.codex/sessions/
+      // Try to find session data and extract useful info
+      const codexSessionDir = join(homedir(), ".codex", "sessions");
+      try {
+        const entries = await readdir(codexSessionDir);
+        // Find most recent session file that could belong to this workspace
+        const jsonFiles = entries.filter(f => f.endsWith(".json"));
+        if (jsonFiles.length === 0) return null;
+
+        // Sort by name descending (Codex uses timestamp-based names)
+        jsonFiles.sort().reverse();
+
+        for (const file of jsonFiles.slice(0, 5)) {
+          try {
+            const content = await readFile(join(codexSessionDir, file), "utf-8");
+            const data = JSON.parse(content);
+            // Match by workspace path if available
+            if (data.workspace && session.workspacePath &&
+                !data.workspace.includes(session.workspacePath)) continue;
+
+            return {
+              summary: data.summary || data.last_message || null,
+              totalCost: data.total_cost ? { usd: data.total_cost } as CostEstimate : null,
+              totalTokens: data.total_tokens || null,
+            };
+          } catch {
+            continue;
+          }
+        }
+      } catch {
+        // ~/.codex/sessions/ doesn't exist
+      }
       return null;
     },
 

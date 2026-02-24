@@ -13,9 +13,15 @@ directTerminalPort: 15801
 
 defaults:
   runtime: tmux
-  agent: claude-code
+  agent: claude-code      # Options: claude-code | codex | aider
   workspace: worktree
   notifiers: [desktop]
+
+# Per-agent defaults (applied when agent=codex)
+agentDefaults:
+  codex:
+    permissions: skip     # --full-auto for autonomous operation
+    # model: o3           # Uncomment to override default model
 
 # ─── VEIL Network Projects ───
 projects:
@@ -26,7 +32,12 @@ projects:
     defaultBranch: main
     sessionPrefix: veilvm
     agentConfig:
-      model: opus
+      model: opus          # claude-code default
+    # Codex-specific overrides (used when spawning with --agent codex)
+    agentOverrides:
+      codex:
+        model: o3
+        permissions: skip
     agentRules: |
       You are working on VeilVM — a custom HyperSDK VM for the VEIL Avalanche L1.
       Chain ID: 22207. The VM has 42 native action types.
