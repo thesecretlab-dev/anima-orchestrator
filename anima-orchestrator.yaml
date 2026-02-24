@@ -1,0 +1,131 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# ANIMA Orchestrator Configuration
+# Forked from ComposioHQ/agent-orchestrator for VEIL sovereign agent infra
+# ═══════════════════════════════════════════════════════════════════════════
+
+dataDir: ~/.anima-orchestrator
+worktreeDir: ~/.anima-worktrees
+port: 3100
+
+# Terminal server ports (offset from default to avoid conflicts)
+terminalPort: 15800
+directTerminalPort: 15801
+
+defaults:
+  runtime: tmux
+  agent: claude-code
+  workspace: worktree
+  notifiers: [desktop]
+
+# ─── VEIL Network Projects ───
+projects:
+  veilvm:
+    name: VeilVM (HyperSDK)
+    repo: thesecretlab-dev/veilvm
+    path: ~/hypersdk/examples/veilvm
+    defaultBranch: main
+    sessionPrefix: veilvm
+    agentConfig:
+      model: opus
+    agentRules: |
+      You are working on VeilVM — a custom HyperSDK VM for the VEIL Avalanche L1.
+      Chain ID: 22207. The VM has 42 native action types.
+      Key docs: VEIL_PRODUCTION_LAUNCH_CHECKLIST.md, LIVE_DEVLOG.md
+      Companion EVM contracts at companion-evm/.
+      SDK at companion-evm/sdk/.
+      Never modify consensus-critical code without explicit approval.
+      Run `go test ./...` before committing.
+    postCreate:
+      - "go mod download"
+
+  veil-frontend:
+    name: VEIL Frontend
+    repo: thesecretlab-dev/veil-frontend
+    path: ~/Desktop/private-github-ready-20260219/veil-frontend
+    defaultBranch: main
+    sessionPrefix: veil-fe
+    agentConfig:
+      model: opus
+    agentRules: |
+      VEIL frontend — veil.markets. Next.js 15, React 19, Tailwind.
+      Brand system: components/brand.tsx (VeilHeader, VeilFooter, FilmGrain).
+      Fonts: Instrument Serif (headings), Space Grotesk (labels), Figtree (body).
+      Colors: #060606 bg, emerald (16,185,129). Cards rounded-[20px].
+      Always verify build: `npx next build` before committing.
+      Deploy: `npx vercel deploy --prod`
+      Access key gate: middleware.ts (VEIL_ACCESS_KEY, default tsl2026).
+      37 routes total. FilmGrain + VeilHeader on every page.
+    postCreate:
+      - "npm install"
+    symlinks: [.env.local]
+
+  veil-contracts:
+    name: VEIL Contracts
+    repo: thesecretlab-dev/veil-contracts
+    path: ~/hypersdk/examples/veilvm/companion-evm
+    defaultBranch: main
+    sessionPrefix: veil-sol
+    agentRules: |
+      Solidity contracts for VEIL Companion EVM (chainId 22207).
+      Key contracts: WVEIL, VAI, Treasury, Keep3r, UniV2Router.
+      Hardened admin: 0xB9a05AFC8eff7eE6a84889Bb9C88A89eAA2f96af
+      Use Foundry for testing. Run `forge test` before committing.
+      Bridge contracts must include rate limiting, pause, and multi-relayer auth.
+
+  anima-runtime:
+    name: ANIMA Runtime
+    repo: thesecretlab-dev/anima-runtime
+    path: ~/Desktop/anima-dashboard/src/veil
+    defaultBranch: main
+    sessionPrefix: anima
+    agentRules: |
+      ANIMA — the sovereign agent framework for VEIL.
+      Agent lifecycle: Genesis → Validation → Identity → Trading → Sovereignty.
+      30 tools across 10 categories. Built on OpenClaw.
+      Strict-private runtime guards. Infrastructure-first lifecycle.
+      Agents provision compute BEFORE identity — they need a home first.
+
+  zeroid:
+    name: ZER0ID
+    repo: thesecretlab-dev/zeroid
+    path: ~/Desktop/zeroid
+    defaultBranch: main
+    sessionPrefix: zeroid
+    agentRules: |
+      ZER0ID — ZK-SNARK identity for VEIL. Privacy-preserving KYC.
+      Circom circuits, Groth16 verifier, SDK, React widget, Express server.
+      Brandmark: circle + diagonal strike (ø) + proof dot + circuit pins.
+      Passport type 8004 for developer verification.
+
+  maestro:
+    name: Maestro
+    repo: thesecretlab-dev/maestro
+    path: ~/Desktop/maestro
+    defaultBranch: main
+    sessionPrefix: maestro
+    agentRules: |
+      Maestro — music production service at maestro.thesecretlab.app.
+      Pricing: SINGLE $99, EP $249, ALBUM $449.
+      Dark cinematic UI. TSL flask logo. Audio haptics, RGB effects.
+
+# ─── Reactions ───
+reactions:
+  ci-failed:
+    auto: true
+    action: send-to-agent
+    retries: 2
+  changes-requested:
+    auto: true
+    action: send-to-agent
+    escalateAfter: 30m
+  approved-and-green:
+    auto: false
+    action: notify
+    priority: action
+
+# ─── Notification Routing ───
+notificationRouting:
+  urgent: [desktop]
+  action: [desktop]
+  warning: [desktop]
+  info: [desktop]
