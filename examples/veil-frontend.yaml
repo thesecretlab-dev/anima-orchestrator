@@ -1,0 +1,66 @@
+# Example: ANIMA orchestrator config for VEIL frontend development
+# Copy relevant sections to your anima-orchestrator.yaml
+
+projects:
+  veil-frontend:
+    name: VEIL Frontend
+    repo: thesecretlab-dev/veil-frontend
+    path: ~/veil-frontend
+    defaultBranch: main
+    sessionPrefix: veil-fe
+
+    agentConfig:
+      model: opus
+      permissions: skip
+
+    agentRules: |
+      # VEIL Frontend Agent Rules
+
+      ## Stack
+      - Next.js 15, React 19, Tailwind CSS, TypeScript
+      - Framer Motion for animations
+      - React Three Fiber (R3F) for 3D elements
+      - Deployed to Vercel at veil.markets
+
+      ## Brand System
+      All shared UI lives in `components/brand.tsx`:
+      - VeilHeader: navigation bar (accepts `current` prop for active link)
+      - VeilFooter: site footer with TSL branding
+      - FilmGrain: cinematic grain overlay
+      - VeilLogo: the ▽ inverted triangle
+      - ScrollReveal: scroll-triggered fade-in
+      - SectionLabel: uppercase emerald label
+      - Divider: horizontal rule
+      - VeilPageShell: wraps page with header + footer + grain
+
+      ## Design Tokens
+      - Background: #060606
+      - Emerald: rgb(16, 185, 129) / #10B981
+      - Card radius: rounded-[20px]
+      - Button primary: gradient emerald + rounded-full
+      - Button secondary: white/06 border + uppercase tracking
+      - Fonts: Instrument Serif (headings), Space Grotesk (labels/numbers), Figtree (body), Space Mono (code)
+
+      ## Rules
+      1. Every page MUST have FilmGrain + VeilHeader
+      2. Use VeilPageShell for new pages
+      3. Run `npx next build` before committing — zero errors
+      4. No sub-agents for wrapper/layout changes (causes hydration issues)
+      5. VeilPreloader REQUIRES `onComplete` callback
+      6. Deploy: `npx vercel deploy --prod`
+      7. Access gate: middleware.ts (key: tsl2026)
+      8. 37 routes total — check build output matches
+
+    postCreate:
+      - "npm install"
+    symlinks: [.env.local]
+
+reactions:
+  ci-failed:
+    auto: true
+    action: send-to-agent
+    retries: 2
+  changes-requested:
+    auto: true
+    action: send-to-agent
+    escalateAfter: 30m

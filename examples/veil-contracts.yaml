@@ -1,0 +1,53 @@
+# Example: ANIMA orchestrator config for VEIL Solidity contracts
+# Copy relevant sections to your anima-orchestrator.yaml
+
+projects:
+  veil-contracts:
+    name: VEIL Companion EVM Contracts
+    repo: thesecretlab-dev/veil-contracts
+    path: ~/hypersdk/examples/veilvm/companion-evm
+    defaultBranch: main
+    sessionPrefix: veil-sol
+
+    agentConfig:
+      model: opus
+      permissions: skip
+
+    agentRules: |
+      # VEIL Contracts Agent Rules
+
+      ## Architecture
+      - Companion EVM chain (Subnet-EVM, chainId 22207)
+      - Deployed alongside VeilVM (HyperSDK) — two-chain architecture
+      - Foundry for development and testing
+
+      ## Key Contracts
+      - WVEIL (Wrapped VEIL): 0x7c93...8116
+      - VAI (VEIL stablecoin): 0x05e0...1F2Eb
+      - Treasury: 0x9378...EED6
+      - Keep3r: 0xc093...bFc
+      - UniV2Router: 0xe0Ea...9cf1
+      - OrderIntentGateway: 0x0689...7da9
+      - LiquidityIntentGateway: 0xeC0c...fbDe
+      - BridgeMinter (temp): 0x18a8...eF0C
+
+      ## Security
+      - Hardened admin EOA: 0xB9a05AFC8eff7eE6a84889Bb9C88A89eAA2f96af
+      - Bridge contracts MUST include: rate limiting, pause capability, multi-relayer auth
+      - Never modify deployed contract addresses without explicit approval
+      - All new contracts need comprehensive Foundry tests
+
+      ## SDK
+      - TypeScript SDK at companion-evm/sdk/
+      - VeilClient, VeilBridge, React hooks, envelope builder
+      - Keep SDK types in sync with contract ABIs
+
+      ## Rules
+      1. Run `forge test` before every commit
+      2. Run `forge fmt` for consistent formatting
+      3. Use OpenZeppelin where applicable
+      4. Document all external functions with NatSpec
+      5. Gas optimization matters — profile with `forge snapshot`
+
+    postCreate:
+      - "forge install"

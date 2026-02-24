@@ -1,8 +1,12 @@
 <div align="center">
 
-# Agent Orchestrator — The Orchestration Layer for Parallel AI Agents
+# ANIMA Orchestrator — Parallel AI Agent Fleet for VEIL
 
-Spawn parallel AI coding agents, each in its own git worktree. Agents autonomously fix CI failures, address review comments, and open PRs — you supervise from one dashboard.
+> Fork of [ComposioHQ/agent-orchestrator](https://github.com/ComposioHQ/agent-orchestrator) — tailored for the VEIL sovereign agent ecosystem.
+
+Spawn parallel AI coding agents across all VEIL projects — each in its own git worktree. Agents autonomously fix CI failures, address review comments, handle chain deployment errors, and open PRs — you supervise from one dashboard.
+
+**See [ANIMA.md](./ANIMA.md) for VEIL-specific setup and features.**
 
 [![GitHub stars](https://img.shields.io/github/stars/ComposioHQ/agent-orchestrator?style=flat-square)](https://github.com/ComposioHQ/agent-orchestrator/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)

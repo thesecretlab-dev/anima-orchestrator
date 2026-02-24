@@ -15,7 +15,7 @@ defaults:
   runtime: tmux
   agent: claude-code      # Options: claude-code | codex | aider
   workspace: worktree
-  notifiers: [desktop]
+  notifiers: [desktop, anima]
 
 # Per-agent defaults (applied when agent=codex)
 agentDefaults:
@@ -133,10 +133,33 @@ reactions:
     auto: false
     action: notify
     priority: action
+  agent-stuck:
+    threshold: 10m
+    action: notify
+    priority: urgent
+
+# ─── VEIL-Specific Custom Reactions ───
+# These extend the base reactions with chain-aware behavior
+customReactions:
+  # When a contract deploy fails, send chain state to the agent
+  deploy-failed:
+    auto: true
+    action: send-to-agent
+    context: |
+      Check chain state: RPC at http://127.0.0.1:9650/ext/bc/2L5JWLhXnDm8dPyBFMjBuqsbPSytL4bfbGJJj37jk5ri1KdXhd/rpc
+      Chain ID: 22207. Verify gas, nonce, and contract size limits.
+    retries: 1
+
+  # When build succeeds on veil-frontend, auto-verify on Vercel preview
+  preview-ready:
+    auto: true
+    action: notify
+    priority: action
+    context: "Vercel preview deployed. Verify at the preview URL before merging."
 
 # ─── Notification Routing ───
 notificationRouting:
-  urgent: [desktop]
-  action: [desktop]
-  warning: [desktop]
-  info: [desktop]
+  urgent: [desktop, anima]
+  action: [desktop, anima]
+  warning: [anima]
+  info: [anima]
