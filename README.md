@@ -1,3 +1,5 @@
+> **Note:** This package is now part of the [ANIMA monorepo](https://github.com/thesecretlab-dev/anima). See `packages/orchestrator/` for the latest code.
+
 # ANIMA Orchestrator
 
 **Parallel AI agent fleet management for the VEIL ecosystem.**
@@ -49,3 +51,4 @@ npm start
 ---
 
 *Deploy agents. Ship code. Sleep.*
+
